@@ -1,6 +1,6 @@
 # The Instagram handle of the public profile you want to scrape.
 [main]
-target_profile = "drunkpeopledoingthings"
+target_profile = "betches"
 num_posts = 5
 headless = false
 rate_limit_seconds_min = 2
@@ -12,14 +12,14 @@ page_scroll_retries = 3
 human_mouse_move_duration = 0.5
 save_every = 2
 comments_scroll_retries = 1
-comment_scroll_steps = 30
+comment_scroll_steps = 5
 
 [data]
 output_dir = "outputs"
 posts_path = "outputs/{target_profile}/posts_{target_profile}.txt"
 metadata_path = "outputs/{target_profile}/metadata_{target_profile}.jsonl"
 skipped_path = "outputs/{target_profile}/skipped_{target_profile}.txt"
-tmp_path = "scrape_results_tmp_{target_profile}.jsonl"
+tmp_path = "outputs/{target_profile}/scrape_results_tmp_{target_profile}.jsonl"
 cookie_file = "src/igscraper/cookies.pkl"
 
 [logging]

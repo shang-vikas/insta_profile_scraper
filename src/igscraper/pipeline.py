@@ -1,32 +1,47 @@
+"""
+Main pipeline for the Instagram Profile Scraper.
+
+This module orchestrates the entire scraping process, from loading the configuration
+to initializing the backend, collecting post URLs, and scraping them in batches.
+"""
 import pdb
 import random
 import traceback
 from .config import load_config
 from .backends import SeleniumBackend
-# from .utils import random_delay, scrape_posts_in_batches
 from .logger import get_logger
 from pathlib import Path
 
-logger = get_logger(__name__)
 import sys
 import traceback
 # import json,sys
 from pathlib import Path
+logger = get_logger(__name__)
 
 def run_pipeline(config_path: str, dry_run: bool = False):
+    """
+    Executes the main scraping pipeline.
+
+    This function initializes the configuration, sets up the scraping backend (Selenium),
+    navigates to the target profile, collects post URLs, and then scrapes the content
+    of those posts in batches. It handles the setup and teardown of the backend
+    and logs the overall progress.
+
+    Args:
+        config_path: The file path to the TOML configuration file.
+        dry_run: A boolean flag (not currently implemented) intended for test runs.
+
+    Returns:
+        A dictionary containing the final lists of 'scraped_posts' and 'skipped_posts'.
+    """
     config = load_config(config_path)
-    # print(config)
-    # sys.exit(0)
-    # logger.info(f"{list(config.items())}")
-    # Initialize backend
+
     backend = SeleniumBackend(config)
 
     results = {"scraped_posts": [], "skipped_posts": []}
 
     output_dir = Path(config.data.output_dir)
     output_dir.mkdir(exist_ok=True)
-    # metadata_file = config.data.metadata_path
-    # skipped_file = config.data.skipped_path
 
     try:
         backend.start()
@@ -47,18 +62,6 @@ def run_pipeline(config_path: str, dry_run: bool = False):
             batch_size=batch_size,
             save_every=config.main.save_every
         )
-
-        # # --- persist scraped posts ---
-        # if results["scraped_posts"]:
-        #     with open(metadata_file, "w", encoding="utf-8") as f:
-        #         for post in results["scraped_posts"]:
-        #             f.write(json.dumps(post, ensure_ascii=False) + "\n")
-
-        # # --- persist skipped posts ---
-        # if results["skipped_posts"]:
-        #     with open(skipped_file, "w", encoding="utf-8") as f:
-        #         for post in results["skipped_posts"]:
-        #             f.write(json.dumps(post, ensure_ascii=False) + "\n")
         
         logger.info(f"Pipeline completed for profile {config.main.target_profile}.")
 
@@ -69,5 +72,3 @@ def run_pipeline(config_path: str, dry_run: bool = False):
         backend.stop()
 
     return results
-
-

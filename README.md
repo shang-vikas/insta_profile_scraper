@@ -22,23 +22,130 @@ This guide will walk you through setting up and running the Instagram Profile Sc
 First, clone the repository and set up a virtual environment.
 ```bash
 # Clone the repository
-# git clone <repository-url>
-# cd ig_profile_scraper
+git clone https://github.com/shang-vikas/insta_profile_scraper.git
+cd ig_profile_scraper
 
 # Create and activate a virtual environment
-python -m venv venv
+python3.11 -m venv venv
 source venv/bin/activate
 
 # Install the required dependencies
-pip install -r requirements.txt
+python3.11 -m pip3install -r requirements.txt
 ```
+
+### chromdriver installation
+
+#### **1. Install Python & pip**
+
+* Make sure Python ≥ 3.11 is installed.
+* Check:
+
+  ```bash
+  python3.11 --version
+  pip3 --version
+  ```
+
+---
+
+#### **2. Install Selenium**
+
+Run:
+
+```bash
+pip3 install selenium
+```
+
+This gives you the core Selenium package.
+
+---
+
+#### **3. Install Google Chrome**
+
+* You need the actual **Google Chrome browser** installed.
+* Check Chrome version:
+
+  * Open Chrome → `chrome://settings/help`
+  * Example: **Chrome 117.0.5938.150**
+
+---
+
+#### **4. Install ChromeDriver**
+
+Here’s the fork in the road:
+
+##### **Option A: Selenium 4.6+ (recommended, easiest)**
+
+Selenium now ships with **Selenium Manager**, which auto-installs ChromeDriver.
+👉 You don’t need to manually download anything. Just run your script and it will handle the driver.
+
+Example script:
+
+```python
+from selenium import webdriver
+
+driver = webdriver.Chrome()
+driver.get("https://www.google.com")
+print(driver.title)
+driver.quit()
+```
+
+If Chrome is installed, this will work out of the box.
+
+---
+
+##### **Option B: Manual ChromeDriver install (if Selenium Manager fails)**
+
+1. Find your Chrome version (step 3).
+2. Download the matching ChromeDriver from:
+   👉 [https://googlechromelabs.github.io/chrome-for-testing/](https://googlechromelabs.github.io/chrome-for-testing/)
+3. Extract it, put the binary somewhere in your **PATH** (e.g., `/usr/local/bin` on Linux/macOS, or `C:\Windows\System32` on Windows).
+4. Verify:
+
+   ```bash
+   chromedriver --version
+   ```
+
+   Should print the version number.
+
+---
+
+##### **5. (Optional but safer) Use webdriver-manager**
+
+This Python package automatically fetches the right ChromeDriver for you, no PATH nonsense.
+
+Install:
+
+```bash
+pip3install webdriver-manager
+```
+
+Usage:
+
+```python
+from selenium import webdriver
+from webdriver_manager.chrome import ChromeDriverManager
+
+driver = webdriver.Chrome(ChromeDriverManager().install())
+driver.get("https://www.google.com")
+print(driver.title)
+driver.quit()
+```
+
+---
+
+✅ **Summary:**
+
+* Install `selenium`
+* Have Chrome installed
+* Either rely on **Selenium Manager** (new) or use **webdriver-manager** (cleaner), or manually install ChromeDriver (old school).
+
 
 ### 3. Authentication (Cookie Generation)
 The scraper logs in using browser cookies to appear like a real user. You need to generate a cookie file first.
 
 1.  Run the `login_Save_cookie.py` script:
     ```bash
-    python src/igscraper/login_Save_cookie.py
+    python3.11 src/igscraper/login_Save_cookie.py
     ```
 2.  A Chrome browser window will open to the Instagram login page. **Log in to your Instagram account manually.**
 3.  After you have successfully logged in, go back to your terminal and **press Enter**.
@@ -58,7 +165,7 @@ Before running the main scraper, you must configure it. A `sample_config.toml` i
 
 Now you are ready to start scraping. Run the command below, pointing to your configuration file.
 ```bash
-python -m src.igscraper.cli --config config.toml
+python3.11 -m src.igscraper.cli --config config.toml
 ```
 The scraper will start, open the target profile, collect post URLs, and then scrape each post one by one, saving the data as it goes.
 
@@ -66,6 +173,24 @@ The scraper will start, open the target profile, collect post URLs, and then scr
 
 The scraper will create an `outputs/` directory (or as configured in your `.toml` file) containing the results inside a folder named after the `target_profile`:
 
--   **`posts_{target_profile}.txt`**: A text file containing the list of all post URLs collected from the profile page.
--   **`metadata_{target_profile}.jsonl`**: The main data file. Each line is a JSON object containing the scraped data for a single post (e.g., title, images, comments, likes).
+-   **`posts_{target_profile}.txt`**: A simple text file containing the list of all post URLs collected from the profile page. This is used for caching so the scraper doesn't have to collect URLs on every run.
 -   **`skipped_{target_profile}.txt`**: A log of posts that were skipped due to errors, saved in JSONL format.
+-   **`metadata_{target_profile}.jsonl`**: This is the main data file. Each line is a complete JSON object representing a single scraped post. The structure of each JSON object is as follows:
+    -   `post_url`: The direct URL to the Instagram post.
+    -   `post_id`: An internal identifier for the post used during the scrape (e.g., "post_0").
+    -   `post_title`: An object containing data from the post's header:
+        -   `aHref`: The profile slug of the post's author (e.g., `/betches/`).
+        -   `siblingTexts`: An array of strings containing the post's caption.
+        -   `timeDatetime`: The timestamp of the post in ISO 8601 format.
+    -   `post_images`: An object (for single-image posts) or a list of objects (for carousels) with image details:
+        -   `src`: The direct URL to the image file.
+        -   `alt`: The alt-text for the image, which often contains an AI-generated description.
+    -   `likes`: An object containing the like count:
+        -   `likesNumber`: The parsed number of likes (integer).
+        -   `likesText`: The raw text for the likes (e.g., "9,589 likes").
+    -   `post_comments_gif`: A list of objects, where each object is a scraped comment:
+        -   `handle`: The username of the commenter.
+        -   `date`: The relative timestamp of the comment (e.g., "8 h").
+        -   `comment`: The text content of the comment.
+        -   `likes`: The raw text for the comment's likes (e.g., "18 likes").
+        -   `commentImgs`: A list of URLs for any GIFs or images included in the comment.

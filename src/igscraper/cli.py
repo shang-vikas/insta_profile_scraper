@@ -1,3 +1,10 @@
+"""
+Command-line interface for the Instagram Profile Scraper.
+
+This script serves as the main entry point for running the scraper from the
+command line. It handles parsing command-line arguments and initiating the
+scraping pipeline.
+"""
 import argparse
 import sys
 from pathlib import Path
@@ -12,6 +19,17 @@ if str(src_path) not in sys.path:
 from igscraper.pipeline import run_pipeline
 
 def main():
+    """
+    Parses command-line arguments and starts the scraping pipeline.
+
+    This function sets up the argument parser to accept the necessary command-line
+    options and then calls the main `run_pipeline` function with the provided
+    configuration.
+
+    Arguments:
+        --config (str): Required. Path to the configuration file (e.g., 'config.toml').
+        --dry-run (bool): Optional. If present, runs the pipeline in a test mode.
+    """
     parser = argparse.ArgumentParser(description='Instagram Profile Scraper')
     parser.add_argument('--config', required=True, help='Path to config file')
     parser.add_argument('--dry-run', action='store_true', help='Test without downloading')

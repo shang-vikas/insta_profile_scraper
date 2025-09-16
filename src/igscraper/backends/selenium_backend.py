@@ -5,7 +5,6 @@ import json
 import pickle
 import random
 import traceback
-from pathlib import Path
 from typing import Iterator, Dict, List, Any
 
 from selenium import webdriver
@@ -38,12 +37,33 @@ from src.igscraper.utils import (
 logger = get_logger(__name__)
 
 class SeleniumBackend(Backend):
+    """
+    A backend implementation using Selenium to control a web browser for scraping.
+
+    This class manages the browser lifecycle, navigation, and data extraction
+    by interacting with web pages and executing JavaScript.
+    """
     def __init__(self, config):
+        """
+        Initializes the SeleniumBackend.
+
+        Args:
+            config: The application's configuration object.
+        """
         self.config = config
         self.driver = None
         self.profile_page = None
 
     def start(self):
+        """
+        Starts the Selenium WebDriver, configures it for stealth, and logs in.
+
+        - Sets up Chrome options to evade bot detection.
+        - Initializes the Chrome driver using webdriver-manager.
+        - Patches the driver to monitor for suspicious navigation.
+        - Logs in using cookies specified in the configuration.
+        - Initializes the ProfilePage object for page interactions.
+        """
         options = Options()
 
         # --- Anti-detection settings from test_sel.py ---
@@ -80,7 +100,13 @@ class SeleniumBackend(Backend):
         self.profile_page = ProfilePage(self.driver, self.config)
 
     def _login_with_cookies(self):
-        """Loads cookies from a file to log in to Instagram."""
+        """
+        Loads cookies from a file to authenticate the browser session.
+
+        The browser must first navigate to the domain ('instagram.com') before
+        cookies can be added. The path to the cookie file is read from the
+        configuration. If the file doesn't exist, the program will exit.
+        """
         if not self.config.data.cookie_file or not os.path.exists(self.config.data.cookie_file):
             logger.info("No cookie file specified in config or cookie file does not exist. Exiting early.")
             sys.exit(1)
@@ -106,14 +132,29 @@ class SeleniumBackend(Backend):
         time.sleep(3) # Wait a bit for page to settle
 
     def stop(self):
+        """Quits the WebDriver and closes all associated browser windows."""
         if self.driver:
             self.driver.quit()
 
     def open_profile(self, profile_handle: str) -> None:
+        """
+        Navigates the browser to a specific Instagram profile page.
+
+        Args:
+            profile_handle: The Instagram username of the profile to open.
+        """
         self.profile_page.navigate_to_profile(profile_handle)
 
     def _load_cached_urls(self, file_path: str) -> list[str] | None:
-        """Return cached URLs if available, else None."""
+        """
+        Loads a list of post URLs from a local JSON file if it exists.
+
+        Args:
+            file_path: The path to the JSON file containing post URLs.
+
+        Returns:
+            A list of URL strings if the file is found and loaded, otherwise None.
+        """
         if os.path.exists(file_path):
             with open(file_path, "r", encoding="utf-8") as f:
                 urls = json.load(f)
@@ -122,14 +163,32 @@ class SeleniumBackend(Backend):
         return None
 
     def _save_urls(self, profile: str, urls: list[str], file_path: str) -> None:
-        """Save URLs to cache file."""
+        """
+        Saves a list of post URLs to a local JSON file.
+
+        Args:
+            profile: The target profile name (used for logging).
+            urls: A list of URL strings to save.
+            file_path: The path where the JSON file will be saved.
+        """
         os.makedirs(os.path.dirname(file_path), exist_ok=True)
         with open(file_path, "w", encoding="utf-8") as f:
             json.dump(urls, f, ensure_ascii=False, indent=2)
         logger.info(f"Saved {len(urls)} post URLs to {file_path}.")
 
     def _load_processed_urls(self, file_path: str) -> set[str]:
-        """Load already-processed post URLs from JSONL file."""
+        """
+        Loads URLs of already scraped posts from the output metadata file.
+
+        This is used to avoid re-scraping posts that have already been processed
+        in previous runs.
+
+        Args:
+            file_path: The path to the JSONL metadata output file.
+
+        Returns:
+            A set of post URL strings that have already been processed.
+        """
         processed = set()
         if os.path.exists(file_path):
             with open(file_path, "r", encoding="utf-8") as f:
@@ -144,6 +203,20 @@ class SeleniumBackend(Backend):
         return processed
 
     def get_post_elements(self, limit: int) -> Iterator[Any]:
+        """
+        Retrieves a list of post URLs to be scraped for a given profile.
+
+        This function implements a caching and filtering logic:
+        1. It first tries to load post URLs from a cached file (`posts_path`).
+        2. If no cache exists, it scrapes the profile page to collect the URLs and
+           saves them to the cache file for future runs.
+        3. It then loads the list of URLs that have already been processed from
+           the final metadata output file.
+        4. It filters the collected URLs, removing any that have already been processed.
+
+        Args:
+            limit: The maximum number of post URLs to collect if scraping from scratch.
+        """
         profile = self.config.main.target_profile
         posts_path = self.config.data.posts_path
 
@@ -167,12 +240,27 @@ class SeleniumBackend(Backend):
 
 
     def extract_comments(self, steps:int = None):
+        """
+        Extracts comments from the currently open post page.
+
+        Args:
+            steps: The number of scroll steps to perform while collecting comments.
+                   If None, a default value is used.
+        """
         return self.profile_page.extract_comments(steps=steps)
 
     def extract_post_metadata(self, post_element: Any) -> Dict:
+        """
+        Placeholder for extracting metadata from a post element.
+        (Not yet implemented)
+        """
         pass
 
     def extract_public_comments(self, post_element: Any, max_comments: int) -> List[Dict]:
+        """
+        Placeholder for extracting public comments from a post.
+        (Not yet implemented)
+        """
         pass
 
 
@@ -184,16 +272,24 @@ class SeleniumBackend(Backend):
         debug=False
     ):
         """
-        Robust batch scraper that opens posts in new tabs, scrapes them, closes each tab,
-        and saves results periodically.
+        Scrapes a list of post URLs in batches, saving results periodically.
 
-        Important behaviors/fixes:
-        - DOES NOT call `window.location.href` (that navigates the current tab)
-        - Waits for new window handle reliably (with small retries)
-        - Always closes the scraped tab in a finally block and switches back to main handle
-        - Uses WebDriverWait for elements where appropriate (backend.extract_comments etc still
-        govern their own waits)
-        - Optional debug flag to keep tabs open / print extra info
+        This method iterates through the provided post URLs, opening each one in a
+        new browser tab to scrape its content. It is designed to be robust,
+        handling tab management, data extraction, and intermittent saving to
+        prevent data loss.
+
+        Args:
+            post_elements (list[str]): A list of post URLs to scrape.
+            batch_size (int): The number of posts to open in tabs at a time.
+            save_every (int): The number of posts to scrape before saving the
+                              collected data to the output files.
+            tab_open_retries (int): The number of retries for detecting a new tab.
+            debug (bool): If True, scraped tabs will not be closed, which is useful
+                          for debugging.
+
+        Returns:
+            A dictionary containing lists of 'scraped_posts' and 'skipped_posts'.
         """
         results = {"scraped_posts": [], "skipped_posts": []}
         total_scraped = 0
@@ -364,8 +460,20 @@ class SeleniumBackend(Backend):
         return results
 
 
-    # helper: open href in new tab and return new handle (or raise)
     def open_href_in_new_tab(self, href,tab_open_retries):
+        """
+        Opens a URL in a new browser tab and returns the new window handle.
+
+        It works by recording the set of window handles before opening the new
+        tab, and then finding the handle that was added.
+
+        Args:
+            href (str): The URL to open.
+            tab_open_retries (int): The number of times to check for a new handle.
+
+        Returns:
+            The window handle (string) of the newly opened tab.
+        """
         before_handles = set(self.driver.window_handles)
         # Open new tab with specified href - this opens a new tab in most browsers
         self.driver.execute_script("window.open(arguments[0], '_blank');", href)
@@ -383,17 +491,20 @@ class SeleniumBackend(Backend):
             raise RuntimeError(f"New tab did not appear for href={href}")
         return new_handle
 
-    #Update: This function works.
     def get_post_title_data(self, href_string, timeout=5):
         """
-        Extract data from the innermost div containing an <a> with href=href_string and <time>.
+        Executes a JavaScript snippet to extract post title, timestamp, and author data.
+
+        The JavaScript code searches for a specific DOM structure that typically
+        contains the post's header information. It looks for the innermost `div`
+        that contains both a link (`<a>`) to the author's profile and a `<time>` element.
 
         Args:
-            driver: Selenium WebDriver instance.
-            href_string: The href string to search for.
+            href_string (str): The profile slug (e.g., `"/ladbible/"`) used to
+                               identify the correct author link.
 
         Returns:
-            dict with keys: topDivClass, aHref, aSrc, timeDatetime, siblingTexts
+            A dictionary containing the extracted data, or None if not found.
         """
         random_delay(2, 4.5)  # small wait to ensure content is fully loaded
         href_string_js = json.dumps(href_string)  # safely quote special characters

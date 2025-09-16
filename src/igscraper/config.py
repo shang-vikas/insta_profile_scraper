@@ -11,7 +11,18 @@ logging.getLogger("urllib3").setLevel(logging.WARNING)
 logging.getLogger("selenium.webdriver.remote").setLevel(logging.INFO)
 
 def resolve_path(path_str: str) -> Path:
-    """Resolve a path from config into an absolute Path."""
+    """
+    Resolves a string path into an absolute Path object.
+
+    If the path is relative, it is resolved against the project's root directory.
+    If it's already absolute, it's returned as is.
+
+    Args:
+        path_str: The path string from the configuration file.
+
+    Returns:
+        An absolute Path object.
+    """
     path = Path(path_str)
     if not path.is_absolute():
         path = PROJECT_ROOT / path
@@ -19,8 +30,17 @@ def resolve_path(path_str: str) -> Path:
 
 def expand_paths(section, substitutions: dict) -> None:
     """
-    Recursively expand placeholders and resolve paths for string fields in a section.
-    Modifies the section object in-place.
+    Recursively expands placeholders and resolves paths for string fields in a config section.
+
+    This function modifies the Pydantic model object in-place. It iterates through
+    the fields of a settings object. If a field is a string containing placeholders
+    (e.g., "{target_profile}"), it formats the string using the `substitutions`
+    dictionary and then resolves it to an absolute path. It also recurses into
+    nested Pydantic models.
+
+    Args:
+        section: A Pydantic BaseSettings object to process.
+        substitutions: A dictionary of key-value pairs for placeholder expansion.
     """
     for field, value in section.__dict__.items():
         if isinstance(value, str):
@@ -35,23 +55,36 @@ def expand_paths(section, substitutions: dict) -> None:
 
 class MainConfig(BaseSettings):
     """
-    Application configuration model.
-    Loads settings from a TOML file and overrides with environment variables.
+    Configuration settings related to the main application logic and scraping behavior.
     """
+    # The Instagram username of the public profile to scrape.
     target_profile: str
+    # The maximum number of post URLs to collect from the profile page.
     num_posts: int = Field(..., gt=0)
+    # If True, runs the browser in headless mode (no GUI).
     headless: bool = True
+    # Minimum random delay (in seconds) between batches of requests.
     rate_limit_seconds_min: int = 2
+    # Maximum random delay (in seconds) between batches of requests.
     rate_limit_seconds_max: int = 5
+    # General-purpose retry count for various operations.
     max_retries: int = 3
+    # Number of posts to open and scrape in a single batch.
     batch_size: int = 4
+    # If True, the batch size will be randomized slightly to appear more human.
     randomize_batch: bool = False
+    # Optional user-agent string for the browser.
     user_agent: Optional[str] = None
+    # Duration (in seconds) for the simulated human mouse movement.
     human_mouse_move_duration: float = 0.5
+    # Number of retries when scrolling the main profile page if no new content loads.
     page_scroll_retries: int = 3
+    # Save scraped data to the final file after every N posts.
     save_every: int = 5
+    # Number of retries when scrolling comments if no new content loads.
     comments_scroll_retries: int = 1
-    comment_scroll_steps: int = 15
+    # Number of scroll steps to perform when collecting comments.
+    comment_scroll_steps: int = 30
 
     # Credentials can be loaded from env vars (e.g., IGSCRAPER_USERNAME)
     # The alias allows the TOML file to use 'instagram_username'.
@@ -59,17 +92,31 @@ class MainConfig(BaseSettings):
     password: Optional[str] = Field(None, alias='instagram_password')
 
 class DataConfig(BaseSettings):
-    posts_path: str
-    metadata_path: str
+    """Configuration settings related to file paths and data storage."""
+    # Directory where all output files will be stored.
     output_dir: str = "outputs"
+    # Path to the file for storing collected post URLs. Supports placeholders.
+    posts_path: str
+    # Path to the final JSONL file for storing scraped post metadata. Supports placeholders.
+    metadata_path: str
+    # Path to the file for logging URLs of skipped posts. Supports placeholders.
     skipped_path: str
+    # Path to the temporary file for intermediate scrape results. Supports placeholders.
     tmp_path: str
+    # Path to the browser cookie file for authentication.
     cookie_file: str
 
 class LoggingConfig(BaseSettings):
+    """Configuration settings for logging."""
+    # The logging level (e.g., "DEBUG", "INFO", "WARNING").
     level: str
 
 class Config(BaseSettings):
+    """
+    The main configuration model that aggregates all other configuration sections.
+
+    It is configured to load environment variables with the prefix "IGSCRAPER_".
+    """
     model_config = SettingsConfigDict(env_prefix="IGSCRAPER_", case_sensitive=False)
 
     main: MainConfig
@@ -77,7 +124,15 @@ class Config(BaseSettings):
     logging: LoggingConfig
 
 def load_config(path: str) -> Config:
-    """Load configuration from TOML file and merge with environment variables."""
+    """
+    Loads configuration from a TOML file, sets up logging, and processes paths.
+
+    Args:
+        path: The path to the TOML configuration file.
+
+    Returns:
+        A fully validated and processed Config object.
+    """
     with open(path, "r") as f:
         data = toml.load(f)
     # Normalize paths in config
@@ -101,4 +156,3 @@ def load_config(path: str) -> Config:
     expand_paths(config, substitutions)
 
     return config
-

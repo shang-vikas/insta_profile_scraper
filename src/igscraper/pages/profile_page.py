@@ -19,17 +19,40 @@ POST_SELECTOR = (By.CSS_SELECTOR, "main a[href^='/p/']")
 POST_MODAL_SELECTOR = (By.CSS_SELECTOR, "div[role='dialog']")
 
 class ProfilePage(BasePage):
+    """
+    Represents an Instagram profile page and provides methods for interacting with it.
+
+    This page object handles navigation, scrolling to load content, and collecting
+    post elements from a user's profile.
+    """
     def __init__(self, driver, config):
+        """
+        Initializes the ProfilePage object.
+
+        Args:
+            driver: The Selenium WebDriver instance.
+            config: The application's configuration object.
+        """
         super().__init__(driver)
         self.config = config
 
     def navigate_to_profile(self, handle: str) -> None:
+        """
+        Navigates the browser to a specific Instagram profile page.
+
+        Args:
+            handle: The Instagram username of the profile to open.
+        """
         url = f"https://www.instagram.com/{handle}/"
         self.driver.get(url)
         self.wait_for_sections()
 
     def get_visible_post_elements(self) -> List[WebElement]:
-        ##TODO: add random timer for smooth scrolling.
+        """
+        Finds and returns all currently visible post elements on the page.
+
+        It locates the rows of posts and extracts the individual post links (<a> tags) from them.
+        """
         xpath_for_class = "//*[@class and contains(concat(' ', @class, ' '), ' _ac7v ')]"
 
         # Instagram has posts in groups of 3 on the handle page.
@@ -41,9 +64,21 @@ class ProfilePage(BasePage):
         all_href_elem = [elem for sublist in all_href_elem for elem in sublist]  # flatten the list
         return all_href_elem
 
-    ## TODO: exponential backoff if posts still loading.
     def scroll_and_collect_(self, limit: int) -> List[str]:
-        """Scrolls and collects post URLs (not raw WebElements)."""
+        """
+        Scrolls down the profile page and collects unique post URLs.
+
+        This method repeatedly scrolls the page to trigger the loading of more posts.
+        After each scroll, it collects the URLs of the visible posts, ensuring no
+        duplicates are added. The process stops when the desired limit is reached
+        or when no new posts are loaded after several retries.
+
+        Args:
+            limit: The target number of post URLs to collect.
+
+        Returns:
+            A list of unique post URL strings.
+        """
         posts = []
         last_height = self.driver.execute_script("return document.body.scrollHeight")
         retries = 0
@@ -129,19 +164,40 @@ class ProfilePage(BasePage):
 
 
     def open_post_element(self, post_element: WebElement) -> None:
+        """
+        Clicks a post element to open the post in a modal dialog.
+
+        Args:
+            post_element: The WebElement corresponding to the post link to be clicked.
+        """
         self.click(post_element)
         self.find(POST_MODAL_SELECTOR)  # Wait for modal to open
 
 
     def extract_comments(self, steps):
+        """
+        Extracts comments from the currently open post modal.
+
+        Args:
+            steps: The number of scroll steps to perform while collecting comments.
+
+        Returns:
+            A list of dictionaries, where each dictionary contains data for one comment.
+        """
         # return human_scroll_and_scrape_comments(self.driver)
         if steps:
-            return scrape_comments_gif(self.driver, steps=steps)
-        return scrape_comments_gif(self.driver)
+            return scrape_comments_with_gif(self.driver, steps=steps)
+        return scrape_comments_with_gif(self.driver)
 
     def wait_for_sections(self, min_sections: int = 2, timeout: int = 10):
         """
-        Wait until at least `min_sections` <section> elements are present in DOM.
+        Waits until a minimum number of <section> elements are present in the DOM.
+
+        This is used as a signal that the main content of the profile page has loaded.
+
+        Args:
+            min_sections: The minimum number of <section> tags to wait for.
+            timeout: The maximum time in seconds to wait.
         """
         wait = WebDriverWait(self.driver, timeout)
         return wait.until(

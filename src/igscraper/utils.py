@@ -35,9 +35,25 @@ logger = get_logger(__name__)
 
 
 def random_delay(min_s: float, max_s: float) -> None:
+    """
+    Pauses execution for a random duration between a min and max value.
+
+    Args:
+        min_s: The minimum number of seconds to sleep.
+        max_s: The maximum number of seconds to sleep.
+    """
     time.sleep(random.uniform(min_s, max_s))
 
 def normalize_hashtags(caption: str) -> list[str]:
+    """
+    Extracts all hashtags (e.g., #example) from a given string.
+
+    Args:
+        caption: The string to search for hashtags.
+
+    Returns:
+        A list of hashtag strings found in the caption.
+    """
     return re.findall(r"#\w+", caption or '')
 
 # def criteria_example(metadata: dict) -> bool:
@@ -52,15 +68,19 @@ def normalize_hashtags(caption: str) -> list[str]:
 
 def scrape_carousel_images(driver, image_gather_func, min_wait=0.5, max_wait=2.2):
     """
-    Scrape all images from an Instagram carousel post.
+    Scrapes all images from an Instagram carousel by repeatedly clicking the 'Next' button.
+
+    This function simulates a user clicking through a multi-image post. After each
+    click, it calls `image_gather_func` to extract data from the newly visible images.
 
     Args:
-        driver: Selenium WebDriver instance already on a post page
-        image_gather_func: function(driver) -> list of images/metadata
-        min_wait, max_wait: range for random wait between swipes
+        driver: The Selenium WebDriver instance, positioned on a post page.
+        image_gather_func: A function that takes the driver and returns a list of image data.
+        min_wait: The minimum random delay (in seconds) between clicks.
+        max_wait: The maximum random delay (in seconds) between clicks.
 
     Returns:
-        List of image data collected
+        A list of all image data dictionaries collected from the carousel.
     """
     image_data = []
     seen_srcs = set()  # track unique 'src' values
@@ -102,9 +122,17 @@ def scrape_carousel_images(driver, image_gather_func, min_wait=0.5, max_wait=2.2
 
 def get_all_post_images_data(driver):
     """
-    Given browser is on post page,
-    this function will extract the AI title given to each image
-    in the post.
+    Extracts attributes from all `<img>` tags within known carousel structures.
+
+    This function attempts to find images within a post by checking for several
+    known HTML structures used by Instagram for carousels. It is designed to be
+    a helper for `scrape_carousel_images`.
+
+    Args:
+        driver: The Selenium WebDriver instance.
+
+    Returns:
+        A list of dictionaries, where each dictionary contains the attributes of an `<img>` tag.
     """
     all_images = []
 
@@ -160,6 +188,15 @@ def get_all_post_images_data(driver):
 
 
 def images_from_post(driver):
+    """
+    A wrapper function to extract images from a post.
+
+    It first attempts to scrape images assuming it's a multi-image carousel post.
+    If that returns no images, it falls back to a method for scraping a single image.
+
+    Args:
+        driver: The Selenium WebDriver instance.
+    """
     ## try to extract multiple images if they exist
     images = get_instagram_post_images(driver)
     if images == []:
@@ -172,9 +209,14 @@ def images_from_post(driver):
 
 def get_instagram_post_images(driver):
     """
-    Extract all attributes of <img> tags in an Instagram post.
-    Deduplicates results by 'src' attribute.
-    Returns: list of dicts with all <img> attributes.
+    Extracts all attributes of `<img>` tags within a post's main article.
+
+    This function uses an efficient combination of XPath and JavaScript to find all
+    image elements, extract their attributes, and deduplicate them based on the 'src'
+    attribute to ensure each image is only recorded once.
+
+    Args:
+        driver: The Selenium WebDriver instance.
     """
     try:
         xp = "//article//ul[contains(@class,'_acay')]//li[contains(@class,'_acaz')]//img"
@@ -370,7 +412,17 @@ def get_instagram_post_images(driver):
 
 def human_like_click(driver, element, actions, retries=3):
     """
-    Try to click an element in a human-like way, with retries and JS fallback.
+    Attempts to click an element in a human-like way, with retries and a JS fallback.
+
+    This function first scrolls the element into view, moves the mouse over it,
+    and then attempts a standard click. If the click is intercepted, it retries.
+    As a last resort, it uses a direct JavaScript click.
+
+    Args:
+        driver: The Selenium WebDriver instance.
+        element: The WebElement to be clicked.
+        actions: An ActionChains instance.
+        retries: The number of click attempts before falling back to JavaScript.
     """
     for attempt in range(retries):
         try:
@@ -399,6 +451,17 @@ def human_like_click(driver, element, actions, retries=3):
 
 
 def extract_post_title_details(driver: WebDriver):
+    """
+    Extracts details from divs that likely contain post title, author, and timestamp.
+
+    It uses a broad XPath to find "innermost" divs that contain either a `<time>`
+    or `<a>` tag but do not have nested divs with the same properties. For each
+    matching div, it extracts its attributes, text, and any nested image, link,
+    or time elements.
+
+    Args:
+        driver: The Selenium WebDriver instance.
+    """
     results = []
     # Select <div class="html-div"> with <time> OR <a> inside
     divs = driver.find_elements(
@@ -458,10 +521,14 @@ def extract_post_title_details(driver: WebDriver):
 
 def cleanup_details(data):
     """
-    Deduplicate images, links, and times in scraped div details.
-    - Images: dedup by src, keep all unique alts in a list
-    - Links: dedup by href, keep one text
-    - Times: dedup by datetime or text
+    Cleans and deduplicates the raw data extracted by `extract_post_title_details`.
+
+    - Images are deduplicated by 'src', and all unique 'alt' texts are collected.
+    - Links are deduplicated by 'href'.
+    - Times are deduplicated by 'datetime'.
+
+    Args:
+        data: The list of dictionaries produced by `extract_post_title_details`.
     """
     cleaned = []
 
@@ -605,16 +672,19 @@ def cleanup_details(data):
 
 def scrape_comments_with_gif(driver, config, wait_selector="div.html-div", timeout=10):
     """
-    Scrape Instagram-like comments from a page using Selenium.
-    
+    Orchestrates the scraping of comments from a post page.
+
+    This function performs three main steps:
+    1. Finds the scrollable container for comments using `find_comment_container`.
+    2. Scrolls the container down to load more comments using `human_scroll`.
+    3. Executes a JavaScript payload to parse all visible comments, extracting
+       the handle, date, text, likes, and any associated images/GIFs.
+
     Args:
-        driver: Selenium WebDriver instance.
-        wait_selector: CSS selector to wait for before executing JS.
-        timeout: Maximum seconds to wait for the comment container.
-        
-    Returns:
-        List of dicts: Each dict has 'handle', 'date', 'comment', 'likes',
-                       and optional 'commentImg'.
+        driver: The Selenium WebDriver instance.
+        config: The application's configuration object.
+        wait_selector: A CSS selector to wait for before starting the process.
+        timeout: The maximum time to wait for the `wait_selector`.
     """
     # Wait until at least one comment container is present
     WebDriverWait(driver, timeout).until(
@@ -760,15 +830,16 @@ def scrape_comments_with_gif(driver, config, wait_selector="div.html-div", timeo
 
 def get_section_with_highest_likes(driver, wait_selector="section", timeout=10):
     """
-    Finds the section with the highest likes on the page using Selenium and JS.
+    Finds the <section> element with the highest like count on the page.
+
+    This function executes a JavaScript snippet that iterates through all `<section>`
+    elements, finds the one containing text related to "likes", parses the number,
+    and returns the data for the section with the highest count.
 
     Args:
-        driver: Selenium WebDriver instance.
-        wait_selector: CSS selector to wait for before executing JS.
-        timeout: Max seconds to wait for at least one section.
-
-    Returns:
-        dict with 'likesText' and 'likesNumber' of the top section (or None).
+        driver: The Selenium WebDriver instance.
+        wait_selector: A CSS selector to wait for before executing the script.
+        timeout: The maximum time to wait for the `wait_selector`.
     """
     # Wait until at least one section is present
     WebDriverWait(driver, timeout).until(
@@ -815,16 +886,16 @@ def get_section_with_highest_likes(driver, wait_selector="section", timeout=10):
 
 def get_first_img_attributes_in_div(driver, wait_selector="div img", timeout=10):
     """
-    Finds the first <img> nested anywhere inside a <div> that has alt, crossorigin, and src attributes,
-    and returns all its attributes as a Python dictionary.
-    
+    Finds the first `<img>` tag that is likely to be the main post image.
+
+    This function is typically used as a fallback for single-image posts. It executes
+    a JavaScript snippet that searches for the first `<img>` inside a `<div>` that
+    has `alt`, `crossorigin`, and `src` attributes, and returns all of its attributes.
+
     Args:
-        driver: Selenium WebDriver instance
-        wait_selector: CSS selector to wait for
-        timeout: Max seconds to wait for element
-    
-    Returns:
-        dict of all attributes of the first matching <img>, or None if not found
+        driver: The Selenium WebDriver instance.
+        wait_selector: A CSS selector to wait for before executing the script.
+        timeout: The maximum time to wait for the `wait_selector`.
     """
     # Wait until at least one image under a div is present
     WebDriverWait(driver, timeout).until(
@@ -1226,14 +1297,14 @@ def scroll_with_mouse(
     max_delay: float = 0.6
 ):
     """
-    Scrolls down the page like a human using random wheel steps.
-    
+    Scrolls the main page down in a human-like manner using the mouse wheel action.
+
     Args:
-        steps (int): How many scroll actions to perform.
-        min_step (int): Minimum pixels per scroll.
-        max_step (int): Maximum pixels per scroll.
-        min_delay (float): Minimum pause between steps.
-        max_delay (float): Maximum pause between steps.
+        steps: The number of scroll actions to perform.
+        min_step: The minimum number of pixels for a single scroll action.
+        max_step: The maximum number of pixels for a single scroll action.
+        min_delay: The minimum random delay (in seconds) between scrolls.
+        max_delay: The maximum random delay (in seconds) between scrolls.
     """
     actions = ActionChains(self.driver)
     for _ in range(steps):
@@ -1242,12 +1313,21 @@ def scroll_with_mouse(
         time.sleep(random.uniform(min_delay, max_delay))
 
 def save_intermediate(post_data, tmp_file):
-    """Append a single post_data dict to a JSONL tmp file."""
+    """
+    Appends a single post's data to a temporary JSONL file.
+
+    This is used for crash recovery, ensuring that scraped data is not lost if the
+    script fails before a full batch is saved.
+
+    Args:
+        post_data: A dictionary containing the data for a single post.
+        tmp_file: The path to the temporary file.
+    """
     with open(tmp_file, "a", encoding="utf-8") as f:
         f.write(json.dumps(post_data, ensure_ascii=False) + "\n")
 
 def clear_tmp_file(tmp_file):
-    """Clear the tmp file after results are flushed to final."""
+    """Clears the temporary file by opening it in write mode."""
     try:
         open(tmp_file, "w").close()
     except Exception as e:
@@ -1475,11 +1555,14 @@ def clear_tmp_file(tmp_file):
 
 def save_scrape_results(results: dict, output_dir: str, config: dict):
     """
-    Save scraped and skipped posts to JSONL files.
+    Saves the collected scraped and skipped posts to their final destination files.
+
+    After writing the data, it clears the in-memory lists to free up memory.
 
     Args:
-        results: dict with keys "scraped_posts" and "skipped_posts"
-        output_dir: path to save files
+        results: A dictionary containing 'scraped_posts' and 'skipped_posts' lists.
+        output_dir: The base directory for output files (used for mkdir).
+        config: The application's configuration object, used to get file paths.
     """
     output_path = Path(output_dir)
     output_path.mkdir(exist_ok=True)
@@ -1965,6 +2048,19 @@ from selenium.webdriver.chrome.options import Options
 import time
 
 def find_comment_container(driver, min_matches=3):
+    """
+    Executes a JavaScript heuristic to find the best scrollable container for comments.
+
+    The script works by:
+    1. Identifying potential "comment block" divs based on their structure.
+    2. Walking up the DOM from each comment block, counting how many blocks share a common ancestor.
+    3. Scoring ancestors based on the number of comment blocks they contain and whether they are scrollable.
+    4. Highlighting the top candidates in the browser for debugging and returning the best one.
+
+    Args:
+        driver: The Selenium WebDriver instance.
+        min_matches: The minimum number of comment blocks an ancestor must contain to be a strong candidate.
+    """
     js_code = """
         return (function(minMatches){
             const logs = [];
@@ -2146,8 +2242,17 @@ def human_scroll(
     max_retries=8,  # max consecutive retries with no height change
 ):
     """
-    Scroll inside the element identified by `selector` in a human-like way.
-    Stops early if bottom is reached or max_retries are hit.
+    Scrolls inside a specific element in a human-like way, with stop conditions.
+
+    This function simulates a user scrolling through a container. It stops scrolling
+    if it detects that it has reached the bottom or if multiple scroll attempts
+    fail to load new content (i.e., the scroll height does not change).
+
+    Args:
+        driver: The Selenium WebDriver instance.
+        selector: The CSS selector for the scrollable container.
+        steps: The maximum number of scroll increments to perform.
+        max_retries: The number of times to retry scrolling if no new content is loaded.
     """
     el = driver.find_element(By.CSS_SELECTOR, selector)
     actions = ActionChains(driver)
@@ -2215,24 +2320,23 @@ def human_mouse_move(
     seed: Optional[int] = None,
 ) -> Dict:
     """
-    Move the mouse in a human-like randomized path over an element (or body if no element).
-    
+    Moves the mouse in a human-like, randomized path over a given element.
+
+    This function simulates realistic mouse movement by generating a series of
+    intermediate points and moving the mouse between them with small, randomized
+    pauses. It can use either Selenium's ActionChains or direct JavaScript
+    mouse events.
+
     Args:
-        driver: Selenium WebDriver instance.
-        element: Selenium WebElement to move over (preferred).
-        selector: CSS selector to locate element (used only if element is None).
-        duration: approx total time (seconds) to spend moving.
-        steps: number of intermediate points (higher = smoother).
-        margin: pixels inset from element edges for target points.
-        pause_jitter: (min, max) pause between sub-movements in seconds (randomized).
-        use_action_chains: if True use ActionChains.move_to_element_with_offset; otherwise dispatch JS MouseEvents.
-        seed: optional RNG seed for reproducible movement (useful for debugging).
-    
+        driver: The Selenium WebDriver instance.
+        element: The target WebElement to move the mouse over.
+        selector: A CSS selector to find the element if `element` is not provided.
+        duration: The approximate total time (in seconds) for the movement.
+        steps: The number of intermediate points in the path (more steps = smoother).
+        use_action_chains: If True, use ActionChains. If False, use JavaScript events.
+
     Returns:
-        dict with keys:
-          - success: bool
-          - points: list of (x, y, t) visited (client coordinates and timestamp)
-          - error: error string if failed
+        A dictionary containing the success status, a list of points visited, and any error.
     Notes:
         - In headless mode, visible movement may not be meaningful, but events still fire.
         - ActionChains offsets are computed relative to element's top-left.
