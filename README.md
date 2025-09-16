@@ -30,36 +30,12 @@ python3.11 -m venv venv
 source venv/bin/activate
 
 # Install the required dependencies
-python3.11 -m pip3install -r requirements.txt
+python3.11 -m pip install -r requirements.txt
 ```
 
-### chromdriver installation
+### Chromedriver installation
 
-#### **1. Install Python & pip**
-
-* Make sure Python ≥ 3.11 is installed.
-* Check:
-
-  ```bash
-  python3.11 --version
-  pip3 --version
-  ```
-
----
-
-#### **2. Install Selenium**
-
-Run:
-
-```bash
-pip3 install selenium
-```
-
-This gives you the core Selenium package.
-
----
-
-#### **3. Install Google Chrome**
+#### **1. Install Google Chrome**
 
 * You need the actual **Google Chrome browser** installed.
 * Check Chrome version:
@@ -69,7 +45,7 @@ This gives you the core Selenium package.
 
 ---
 
-#### **4. Install ChromeDriver**
+#### **2. Install ChromeDriver**
 
 Here’s the fork in the road:
 
@@ -106,39 +82,7 @@ If Chrome is installed, this will work out of the box.
    ```
 
    Should print the version number.
-
 ---
-
-##### **5. (Optional but safer) Use webdriver-manager**
-
-This Python package automatically fetches the right ChromeDriver for you, no PATH nonsense.
-
-Install:
-
-```bash
-pip3install webdriver-manager
-```
-
-Usage:
-
-```python
-from selenium import webdriver
-from webdriver_manager.chrome import ChromeDriverManager
-
-driver = webdriver.Chrome(ChromeDriverManager().install())
-driver.get("https://www.google.com")
-print(driver.title)
-driver.quit()
-```
-
----
-
-✅ **Summary:**
-
-* Install `selenium`
-* Have Chrome installed
-* Either rely on **Selenium Manager** (new) or use **webdriver-manager** (cleaner), or manually install ChromeDriver (old school).
-
 
 ### 3. Authentication (Cookie Generation)
 The scraper logs in using browser cookies to appear like a real user. You need to generate a cookie file first.
