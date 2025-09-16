@@ -2,11 +2,13 @@
 
 A maintainable Python project for collecting public Instagram profile data.
 
-<!-- README.md -->
-<video controls width="720">
-  <source src="https://github.com/shang-vikas/insta_profile_scraper/releases/download/v1.0.0/demo_ig_Scraper_final_720p_fast_mp4.mp4" type="video/mp4">
-  Your browser does not support the video tag.
-</video>
+## Short Byte
+![Demo GIF](https://github.com/shang-vikas/insta_profile_scraper/releases/download/v1.0.0/demo_2m00s_2m20s.gif)
+
+For the **full demo video**, click the thumbnail below:
+
+[![Watch full demo](assets/thumbnail.png)](https://github.com/shang-vikas/insta_profile_scraper/releases/download/v1.0.0/demo_ig_Scraper_final_720p_fast_mp4.mp4)
+
 
 ## Quick Start
 This guide will walk you through setting up and running the Instagram Profile Scraper.
@@ -30,57 +32,6 @@ source venv/bin/activate
 # Install the required dependencies
 python3.11 -m pip install -r requirements.txt
 ```
-
-### Chromedriver installation
-
-#### **1. Install Google Chrome**
-
-* You need the actual **Google Chrome browser** installed.
-* Check Chrome version:
-
-  * Open Chrome → `chrome://settings/help`
-  * Example: **Chrome 117.0.5938.150**
-
----
-
-#### **2. Install ChromeDriver**
-
-Here’s the fork in the road:
-
-##### **Option A: Selenium 4.6+ (recommended, easiest)**
-
-Selenium now ships with **Selenium Manager**, which auto-installs ChromeDriver.
-👉 You don’t need to manually download anything. Just run your script and it will handle the driver.
-
-Example script:
-
-```python
-from selenium import webdriver
-
-driver = webdriver.Chrome()
-driver.get("https://www.google.com")
-print(driver.title)
-driver.quit()
-```
-
-If Chrome is installed, this will work out of the box.
-
----
-
-##### **Option B: Manual ChromeDriver install (if Selenium Manager fails)**
-
-1. Find your Chrome version (step 3).
-2. Download the matching ChromeDriver from:
-   👉 [https://googlechromelabs.github.io/chrome-for-testing/](https://googlechromelabs.github.io/chrome-for-testing/)
-3. Extract it, put the binary somewhere in your **PATH** (e.g., `/usr/local/bin` on Linux/macOS, or `C:\Windows\System32` on Windows).
-4. Verify:
-
-   ```bash
-   chromedriver --version
-   ```
-
-   Should print the version number.
----
 
 ### 3. Authentication (Cookie Generation)
 The scraper logs in using browser cookies to appear like a real user. You need to generate a cookie file first.
@@ -137,6 +88,56 @@ The scraper will create an `outputs/` directory (or as configured in your `.toml
         -   `likes`: The raw text for the comment's likes (e.g., "18 likes").
         -   `commentImgs`: A list of URLs for any GIFs or images included in the comment.
 
+## Additional Notes
+
+### Chromedriver installation(Incase selenium doesnt install it automatically)
+
+#### **1. Install Google Chrome**
+
+* You need the actual **Google Chrome browser** installed.
+* Check Chrome version:
+
+  * Open Chrome → `chrome://settings/help`
+  * Example: **Chrome 117.0.5938.150**
+
+
+#### **2. Install ChromeDriver**
+
+Here’s the fork in the road:
+
+##### **Option A: Selenium 4.6+ (recommended, easiest)**
+
+Selenium now ships with **Selenium Manager**, which auto-installs ChromeDriver.
+👉 You don’t need to manually download anything. Just run your script and it will handle the driver.
+
+Example script:
+
+```python
+from selenium import webdriver
+
+driver = webdriver.Chrome()
+driver.get("https://www.google.com")
+print(driver.title)
+driver.quit()
+```
+
+If Chrome is installed, this will work out of the box.
+
+
+##### **Option B: Manual ChromeDriver install (if Selenium Manager fails)**
+
+1. Find your Chrome version (step 3).
+2. Download the matching ChromeDriver from:
+   👉 [https://googlechromelabs.github.io/chrome-for-testing/](https://googlechromelabs.github.io/chrome-for-testing/)
+3. Extract it, put the binary somewhere in your **PATH** (e.g., `/usr/local/bin` on Linux/macOS, or `C:\Windows\System32` on Windows).
+4. Verify:
+
+   ```bash
+   chromedriver --version
+   ```
+
+   Should print the version number.
+---
 
 ## Legal Notice
 
