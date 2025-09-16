@@ -2,13 +2,11 @@
 
 A maintainable Python project for collecting public Instagram profile data.
 
-## Legal Notice
-
-This project is for educational purposes only. Please:
-- Respect Instagram's Terms of Service
-- Only scrape publicly available data
-- Respect rate limits and add delays between requests
-- Do not store or distribute copyrighted content without permission
+<!-- README.md -->
+<video controls width="720">
+  <source src="https://github.com/shang-vikas/insta_profile_scraper/releases/download/v1.0.0/demo_ig_Scraper_final_720p_fast_mp4.mp4" type="video/mp4">
+  Your browser does not support the video tag.
+</video>
 
 ## Quick Start
 This guide will walk you through setting up and running the Instagram Profile Scraper.
@@ -23,7 +21,7 @@ First, clone the repository and set up a virtual environment.
 ```bash
 # Clone the repository
 git clone https://github.com/shang-vikas/insta_profile_scraper.git
-cd ig_profile_scraper
+cd insta_profile_scraper
 
 # Create and activate a virtual environment
 python3.11 -m venv venv
@@ -138,3 +136,12 @@ The scraper will create an `outputs/` directory (or as configured in your `.toml
         -   `comment`: The text content of the comment.
         -   `likes`: The raw text for the comment's likes (e.g., "18 likes").
         -   `commentImgs`: A list of URLs for any GIFs or images included in the comment.
+
+
+## Legal Notice
+
+This project is for educational purposes only. Please:
+- Respect Instagram's Terms of Service
+- Only scrape publicly available data
+- Respect rate limits and add delays between requests
+- Do not store or distribute copyrighted content without permission
