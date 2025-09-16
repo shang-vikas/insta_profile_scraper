@@ -1,0 +1,149 @@
+import random,pdb
+from .base_page import BasePage
+from selenium.webdriver.common.by import By
+from selenium.webdriver.remote.webelement import WebElement
+import time, logging
+from typing import List
+from selenium.webdriver.support.ui import WebDriverWait
+
+from src.igscraper.utils import scrape_comments_with_gif,scroll_with_mouse,random_delay
+from src.igscraper.logger import get_logger
+from typing import List
+from selenium.common.exceptions import WebDriverException, StaleElementReferenceException
+
+logger = get_logger(__name__)
+# TODO: These selectors are fragile and may need frequent updates
+# This selector is more robust. It looks for any link within the main content
+# area that has a URL path starting with /p/, which is characteristic of post links.
+POST_SELECTOR = (By.CSS_SELECTOR, "main a[href^='/p/']")
+POST_MODAL_SELECTOR = (By.CSS_SELECTOR, "div[role='dialog']")
+
+class ProfilePage(BasePage):
+    def __init__(self, driver, config):
+        super().__init__(driver)
+        self.config = config
+
+    def navigate_to_profile(self, handle: str) -> None:
+        url = f"https://www.instagram.com/{handle}/"
+        self.driver.get(url)
+        self.wait_for_sections()
+
+    def get_visible_post_elements(self) -> List[WebElement]:
+        ##TODO: add random timer for smooth scrolling.
+        xpath_for_class = "//*[@class and contains(concat(' ', @class, ' '), ' _ac7v ')]"
+
+        # Instagram has posts in groups of 3 on the handle page.
+        # each elements_with_class_xpath has 3 posts inside it
+        elements_with_class_xpath = self.driver.find_elements(By.XPATH, xpath_for_class)
+        logging.info(f"Found {len(elements_with_class_xpath)} elements with class _ac7v")
+        ## flatten to get all posts
+        all_href_elem = [row.find_elements(By.CSS_SELECTOR, "a") for row in elements_with_class_xpath]
+        all_href_elem = [elem for sublist in all_href_elem for elem in sublist]  # flatten the list
+        return all_href_elem
+
+    ## TODO: exponential backoff if posts still loading.
+    def scroll_and_collect_(self, limit: int) -> List[str]:
+        """Scrolls and collects post URLs (not raw WebElements)."""
+        posts = []
+        last_height = self.driver.execute_script("return document.body.scrollHeight")
+        retries = 0
+
+        try:
+            while len(posts) < limit:
+                try:
+                    new_posts = self.get_visible_post_elements()
+                    for post in new_posts:
+                        try:
+                            href = post.get_attribute("href")
+                            if href and "reel" not in href and href not in posts:
+                                posts.append(href)
+                                if len(posts) >= limit:
+                                    break
+                        except StaleElementReferenceException:
+                            logger.debug("Skipped stale element while extracting href.")
+                            continue
+
+                    scroll_with_mouse(self, steps=4)
+
+                    new_height = self.driver.execute_script("return document.body.scrollHeight")
+                    if new_height == last_height:
+                        retries += 1
+                        random_delay(1,3)
+                        if retries >= self.config.main.page_scroll_retries:
+                            logger.warning("No new posts found, stopping scroll.")
+                            break
+                    else:
+                        retries = 0
+                    last_height = new_height
+
+                except WebDriverException as e:
+                    logger.error(f"Selenium error during scroll: {e}")
+                    break
+
+        except Exception as e:
+            logger.exception(f"Unexpected error in scroll_and_collect: {e}")
+
+        finally:
+            logger.info(f"Collected {len(posts)} post URLs.")
+            return posts
+
+    
+    # def scroll_and_collect(self, limit: int) -> List[WebElement]:
+    #     posts = []
+    #     last_height = self.driver.execute_script("return document.body.scrollHeight")
+    #     retries = 0
+
+    #     try:
+    #         while len(posts) < limit:
+    #             try:
+    #                 new_posts = self.get_visible_post_elements()
+    #                 for post in new_posts:
+    #                     try:
+    #                         href = post.get_attribute("href")
+    #                         if post not in posts and len(posts) < limit and href and "reel" not in href:
+    #                             posts.append(post)
+    #                     except StaleElementReferenceException:
+    #                         logger.debug("Skipped stale element.")
+    #                         continue
+
+    #                 scroll_with_mouse(self, steps=4)
+
+    #                 new_height = self.driver.execute_script("return document.body.scrollHeight")
+    #                 if new_height == last_height:
+    #                     retries += 1
+    #                     if retries >= 3:
+    #                         logger.warning("No new posts found, stopping scroll.")
+    #                         break
+    #                 last_height = new_height
+
+    #             except WebDriverException as e:
+    #                 logger.error(f"Selenium error during scroll: {e}")
+    #                 break
+
+    #     except Exception as e:
+    #         logger.exception(f"Unexpected error in scroll_and_collect: {e}")
+
+    #     finally:
+    #         logger.info(f"Collected {len(posts)} post elements.")
+    #         return posts
+
+
+    def open_post_element(self, post_element: WebElement) -> None:
+        self.click(post_element)
+        self.find(POST_MODAL_SELECTOR)  # Wait for modal to open
+
+
+    def extract_comments(self, steps):
+        # return human_scroll_and_scrape_comments(self.driver)
+        if steps:
+            return scrape_comments_gif(self.driver, steps=steps)
+        return scrape_comments_gif(self.driver)
+
+    def wait_for_sections(self, min_sections: int = 2, timeout: int = 10):
+        """
+        Wait until at least `min_sections` <section> elements are present in DOM.
+        """
+        wait = WebDriverWait(self.driver, timeout)
+        return wait.until(
+            lambda d: len(d.find_elements(By.TAG_NAME, "section")) >= min_sections
+        )
