@@ -9,6 +9,7 @@ driver.get("https://www.instagram.com/accounts/login/")
 input("👉 After logging in successfully, press Enter here...")
 
 # Save cookies
-pickle.dump(driver.get_cookies(), open(f"cookies_{time.time()}.pkl", "wb"))
-print("✅ Cookies saved to cookies.pkl")
+filename = f"src/igscraper/cookies_{time()}.pkl"
+pickle.dump(driver.get_cookies(), open(filename, "wb"))
+print(f"✅ Cookies saved to {filename}")
 
