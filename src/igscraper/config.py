@@ -1,7 +1,7 @@
 import toml
-from pydantic import Field, ValidationError
+from pydantic import Field, ValidationError, BaseModel
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from typing import Optional, Callable, Any
+from typing import Optional, Callable, Any, List
 from src.igscraper.logger import configure_root_logger, get_logger
 from pathlib import Path
 import logging
@@ -53,14 +53,19 @@ def expand_paths(section, substitutions: dict) -> None:
             # Recurse into nested models (like DataConfig, MainConfig)
             expand_paths(value, substitutions)
 
+class ProfileTarget(BaseModel):
+    """Represents a single profile to be scraped."""
+    name: str
+    num_posts: int = Field(..., gt=0)
+
 class MainConfig(BaseSettings):
     """
     Configuration settings related to the main application logic and scraping behavior.
     """
-    # The Instagram username of the public profile to scrape.
     target_profile: str
-    # The maximum number of post URLs to collect from the profile page.
     num_posts: int = Field(..., gt=0)
+    # A list of target profiles to scrape.
+    target_profiles: List[ProfileTarget]
     # If True, runs the browser in headless mode (no GUI).
     headless: bool = True
     # Minimum random delay (in seconds) between batches of requests.
@@ -152,7 +157,7 @@ def load_config(path: str) -> Config:
     config = Config(**data)
 
     # Expand and normalize all paths in one go
-    substitutions = {"target_profile": config.main.target_profile}
-    expand_paths(config, substitutions)
+    # substitutions = {"target_profile": config.main.target_profile}
+    # expand_paths(config, substitutions)
 
     return config
