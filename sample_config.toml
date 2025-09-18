@@ -4,12 +4,16 @@
 
 # MODE 1: Scrape from profiles.
 # A list of Instagram profiles to scrape. Each has a 'name' and 'num_posts'.
-# target_profiles = [
-#    { name = "betches", num_posts = 5 },
-#    { name = "ladbible", num_posts = 10 }
-# ]
+target_profiles = [
+    { name = "textsfromyourex", num_posts = 3 },
+    { name = "ladbible", num_posts = 1 }
+ ]
 
-run_name_for_url_file = "my_url_file_scrape" # Used for output folder name in URL file mode
+# run_name_for_url_file = "my_url_file_scrape" # Used for output folder name in URL file mode
+
+# These paths use placeholders like {target_profile} which will be automatically filled.
+# In URL file mode, {target_profile} is replaced by `run_name_for_url_file`.
+# urls_filepath = "urls_to_scrape.txt"
 
 # If true, the browser will run in the background without a visible window.
 # Recommended: true for performance, false for debugging.
@@ -52,9 +56,7 @@ comment_scroll_steps = 3
 # The main directory where all output files will be stored.
 output_dir = "outputs"
 
-# These paths use placeholders like {target_profile} which will be automatically filled.
-# In URL file mode, {target_profile} is replaced by `run_name_for_url_file`.
-urls_filepath = "urls_to_scrape.txt"
+
 
 posts_path = "outputs/{target_profile}/posts_{target_profile}.txt"
 metadata_path = "outputs/{target_profile}/metadata_{target_profile}.jsonl"
@@ -69,3 +71,4 @@ cookie_file = "src/igscraper/cookies_1758028035.025856.pkl"
 # The logging level.
 # Recommended: "INFO" for normal runs, "DEBUG" for troubleshooting.
 level = "DEBUG"
+log_dir = "outputs/logs"

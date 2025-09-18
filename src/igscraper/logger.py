@@ -3,7 +3,7 @@ import sys
 import time
 from pathlib import Path
 
-def configure_root_logger(level: str = "INFO") -> None:
+def configure_root_logger(level: str = "INFO", log_dir: Path = None) -> None:
     """Configure the root logger with handlers and formatting."""
     root = logging.getLogger()
 
@@ -22,7 +22,11 @@ def configure_root_logger(level: str = "INFO") -> None:
         root.addHandler(console_handler)
 
         # File handler
-        log_dir = Path.cwd()  # Assumes script is run from the project root
+        if log_dir is None:
+            log_dir = Path.cwd()
+        
+        # Ensure the log directory exists
+        log_dir.mkdir(parents=True, exist_ok=True)
         log_file = log_dir / f"scraper_log_{int(time.time())}.log"
         file_handler = logging.FileHandler(log_file)
         file_handler.setFormatter(formatter)

@@ -31,6 +31,7 @@ from src.igscraper.utils import (
     save_scrape_results,
     clear_tmp_file,
     random_delay,
+    scrape_carousel_images
 )
 
 
@@ -256,13 +257,92 @@ class SeleniumBackend(Backend):
         """
         pass
 
-    def extract_public_comments(self, post_element: Any, max_comments: int) -> List[Dict]:
+    def _scrape_and_close_tab(self, post_index: int, post_url: str, tab_handle: str, main_window_handle: str, debug: bool) -> tuple[dict | None, dict | None]:
         """
-        Placeholder for extracting public comments from a post.
-        (Not yet implemented)
-        """
-        pass
+        Scrapes a single post in its dedicated tab and then closes the tab.
 
+        This method encapsulates the entire lifecycle for one post, including
+        switching to the tab, data extraction with individual error handling,
+        and robustly closing the tab and switching back to the main window.
+
+        Args:
+            post_index: The index of the post.
+            post_url: The URL of the post.
+            tab_handle: The window handle for the post's tab.
+            main_window_handle: The window handle of the main tab.
+            debug: If True, the tab will not be closed.
+
+        Returns:
+            A tuple containing (post_data, error_data).
+            - (post_data, None) on success.
+            - (None, error_dict) on failure.
+            - (None, None) if no browser windows are left.
+        """
+        try:
+            # switch to the new tab
+            self.driver.switch_to.window(tab_handle)
+            # Anti Bot measure
+            human_mouse_move(self.driver,duration=self.config.main.human_mouse_move_duration)
+            logger.info(f"Switched to tab {tab_handle} for post {post_index} ({post_url})")
+            # optional short wait for page to start loading
+            try:
+                time.sleep(random.uniform(0.6, 1.2))
+            except Exception:
+                logger.debug("Page load wait did not find expected element, continuing.")
+
+            post_id = f"post_{post_index}"
+            post_data = {
+                "post_url": post_url,
+                "post_id": post_id,
+                "post_title": None,
+                "post_images": [],
+                "post_comments_gif": [],
+            }
+
+            # Title / metadata
+            try:
+                handle_slug = f"/{self.config.main.target_profile}/"
+                logger.info(f"Extracting title data for {post_url} with handle {handle_slug}")
+                post_data["post_title"] = self.get_post_title_data(handle_slug) or ""
+            except Exception as e:
+                logger.error(f"Title extraction failed for {post_url}: {e}")
+                logger.debug(traceback.format_exc())
+
+            # Images
+            try:
+                # post_data["post_images"] = scrape_carousel_images(self.driver, images_from_post) or []
+                post_data["post_images"] = images_from_post(self.driver) or []
+                logger.info(f"Images extraction successful for {post_url}")
+            except Exception as e:
+                logger.error(f"Images extraction failed for {post_url}: {e}")
+                logger.debug(traceback.format_exc())
+
+            # Likes / other sections
+            try:
+                post_data["likes"] = get_section_with_highest_likes(self.driver) or {}
+                logger.info(f"Likes extraction successful for {post_url}")
+            except Exception as e:
+                logger.error(f"Likes extraction failed for {post_url}: {e}")
+                logger.debug(traceback.format_exc())
+            
+            # comments
+            try:
+                post_data["post_comments_gif"] = scrape_comments_with_gif(self.driver,self.config) or []
+            except Exception as e:
+                logger.error(f"Comments extraction with gif failed for {post_url}: {e}")
+                logger.debug(traceback.format_exc())
+
+            return post_data, None
+
+        except Exception as e:
+            logger.exception(f"Unexpected error while scraping post {post_index} ({post_url}): {e}")
+            error_data = {"index": post_index, "reason": str(e), "profile": self.config.main.target_profile}
+            return None, error_data
+        finally:
+            self._close_tab_and_switch_back(tab_handle, main_window_handle, debug)
+            # Check if any windows are left open after closing.
+            if not self.driver.window_handles:
+                return None, None
 
     def scrape_posts_in_batches(self,
         post_elements,
@@ -340,113 +420,32 @@ class SeleniumBackend(Backend):
                     })
 
             # --- scrape each opened tab, one-by-one, ensuring closure ---
-            for i, href, handle in opened:
-                try:
-                    # switch to the new tab
-                    self.driver.switch_to.window(handle)
-                    # Anti Bot measure
-                    human_mouse_move(self.driver,duration=self.config.main.human_mouse_move_duration)
-                    logger.info(f"Switched to tab {handle} for post {i} ({href})")
-                    # optional short wait for page to start loading
-                    try:
-                        # If you have a reliable "post content" element to wait for, use it here.
-                        # Example (commented): WebDriverWait(driver, page_load_timeout).until(
-                        #     EC.presence_of_element_located((By.CSS_SELECTOR, "article"))
-                        # )
-                        time.sleep(random.uniform(0.6, 1.2))
-                    except Exception:
-                        # non-fatal - proceed and rely on backend.extract_* waits
-                        logger.debug("Page load wait did not find expected element, continuing.")
+            for post_index, post_url, tab_handle in opened:
+                post_data, error_data = self._scrape_and_close_tab(post_index, post_url, tab_handle, main_handle, debug)
 
-                    post_id = f"post_{i}"
-                    post_data = {
-                        "post_url": href,
-                        "post_id": post_id,
-                        "post_title": None,
-                        "post_images": [],
-                        "post_comments": [],
-                    }
+                if post_data is None and error_data is None:
+                    # This indicates no browser windows are left.
+                    logger.info("No browser windows left after closing tab. Ending scrape.")
+                    return results
 
-                    # Title / metadata
-                    try:
-                        handle_slug = f"/{self.config.main.target_profile}/"
-                        logger.info(f"Extracting title data for {href} with handle {handle_slug}")
-                        post_data["post_title"] = self.get_post_title_data(handle_slug) or ""
-                    except Exception as e:
-                        logger.error(f"Title extraction failed for {href}: {e}")
-                        logger.debug(traceback.format_exc())
+                if error_data:
+                    results["skipped_posts"].append(error_data)
+                    continue
 
-                    # Images
-                    try:
-                        post_data["post_images"] = images_from_post(self.driver) or []
-                        logger.info(f"Images extraction successful for {href}")
-                        logger.info(f'{post_data["post_images"]}')
-                    except Exception as e:
-                        logger.error(f"Images extraction failed for {href}: {e}")
-                        logger.debug(traceback.format_exc())
-
-                    # Likes / other sections
-                    try:
-                        post_data["likes"] = get_section_with_highest_likes(self.driver) or {}
-                        logger.info(f"Likes extraction successful for {href}")
-                    except Exception as e:
-                        logger.error(f"Likes extraction failed for {href}: {e}")
-                        logger.debug(traceback.format_exc())
-                    
-                    # comments
-                    try:
-                        post_data["post_comments_gif"] = scrape_comments_with_gif(self.driver,self.config) or []
-                    except Exception as e:
-                        logger.error(f"Comments extraction with gif failed for {href}: {e}")
-                        logger.debug(traceback.format_exc())
-
-
+                if post_data:
                     results["scraped_posts"].append(post_data)
                     total_scraped += 1
-                    logger.info(f"Scraped post {i} ({href}). Total scraped: {total_scraped}")
+                    logger.info(f"Scraped post {post_index} ({post_url}). Total scraped: {total_scraped}")
 
-                    # --- save every result immediately to tmp file ---
                     try:
                         save_intermediate(post_data, tmp_file)
                     except Exception as e:
-                        logger.warning(f"Failed to write tmp result for {href}: {e}")
+                        logger.warning(f"Failed to write tmp result for {post_url}: {e}")
 
-                    # --- every N posts, save final and clear tmp ---
                     if total_scraped > 0 and total_scraped % save_every == 0:
                         save_scrape_results(results, self.config.data.output_dir, self.config)
                         clear_tmp_file(tmp_file)
                         logger.info(f"Saved results after {total_scraped} scraped posts.")
-
-
-                except Exception as e:
-                    logger.exception(f"Unexpected error while scraping post {i} ({href}): {e}")
-                    results["skipped_posts"].append({
-                        "index": i,
-                        "reason": str(e),
-                        "profile": self.config.main.target_profile
-                    })
-                finally:
-                    # Ensure this tab is closed and we switch back to a known handle.
-                    try:
-                        if debug:
-                            logger.info(f"DEBUG mode: leaving tab {handle} open.")
-                        else:
-                            self.driver.close()
-                            logger.debug(f"Closed tab {handle}")
-                    except Exception as e:
-                        logger.warning(f"Error closing tab {handle}: {e}")
-                    # switch back to main handle (if it's still present) or to any remaining handle
-                    handles = self.driver.window_handles
-                    if not handles:
-                        logger.info("No browser windows left after closing tab.")
-                        return results
-                    # prefer main_handle if still available
-                    if main_handle in handles:
-                        self.driver.switch_to.window(main_handle)
-                    else:
-                        # fallback to last handle
-                        self.driver.switch_to.window(handles[0])
-                    logger.debug(f"Switched back to handle {self.driver.current_window_handle}")
 
             # optional: jittered wait between batches to mimic human rate-limits
             random_delay(self.config.main.rate_limit_seconds_min, self.config.main.rate_limit_seconds_max)
@@ -459,6 +458,30 @@ class SeleniumBackend(Backend):
 
         return results
 
+    def _close_tab_and_switch_back(self, tab_handle_to_close: str, main_window_handle: str, debug: bool):
+        """
+        Closes the specified tab and switches the driver's focus back.
+
+        Args:
+            tab_handle_to_close: The window handle of the tab to close.
+            main_window_handle: The handle of the main window to switch back to.
+            debug: If True, the tab will not be closed.
+        """
+        try:
+            if debug:
+                logger.info(f"DEBUG mode: leaving tab {tab_handle_to_close} open.")
+            else:
+                self.driver.close()
+                logger.debug(f"Closed tab {tab_handle_to_close}")
+        except Exception as e:
+            logger.warning(f"Error closing tab {tab_handle_to_close}: {e}")
+
+        handles = self.driver.window_handles
+        if main_window_handle in handles:
+            self.driver.switch_to.window(main_window_handle)
+        elif handles:
+            self.driver.switch_to.window(handles[0])
+        logger.debug(f"Switched back to handle {self.driver.current_window_handle}")
 
     def open_href_in_new_tab(self, href,tab_open_retries):
         """

@@ -120,6 +120,8 @@ class LoggingConfig(BaseSettings):
     """Configuration settings for logging."""
     # The logging level (e.g., "DEBUG", "INFO", "WARNING").
     level: str
+    # Optional: Directory to save log files.
+    log_dir: Optional[str] = None
 
 class Config(BaseSettings):
     """
@@ -146,11 +148,21 @@ def load_config(path: str) -> Config:
     with open(path, "r") as f:
         data = toml.load(f)
 
-    # Configure logging once, using logging level from TOML
-    if "logging" in data and "level" in data["logging"]:
-        configure_root_logger(data["logging"]["level"])
+    # Determine logging configuration from the raw TOML data
+    log_level = data.get("logging", {}).get("level", "INFO")
+    log_dir_path_str = data.get("logging", {}).get("log_dir")
+
+    if log_dir_path_str:
+        log_dir = resolve_path(log_dir_path_str)
     else:
-        configure_root_logger("INFO")
+        # Fallback to the 'outputs/logs' directory if not specified
+        output_dir = data.get("data", {}).get("output_dir", "outputs")
+        log_dir = resolve_path(output_dir) / "logs"
+
+    # Configure logging once, using logging level from TOML
+    # and placing logs in the specified directory.
+    configure_root_logger(level=log_level, log_dir=log_dir)
+
     logger = get_logger("config")
     logger.debug("Configuration loaded successfully")
     
