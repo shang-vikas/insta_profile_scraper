@@ -1,13 +1,16 @@
 # --- Main Application Settings ---
 [main]
-# A list of Instagram profiles to scrape.
-# Each profile has a 'name' (the Instagram handle) and 'num_posts' (how many posts to collect).
-target_profile = "xyz"
-num_posts = 2
-target_profiles = [
-    { name = "betches", num_posts = 2 },
-    { name = "ladbible", num_posts = 2 }
-]
+# --- CHOOSE ONE MODE ---
+
+# MODE 1: Scrape from profiles.
+# A list of Instagram profiles to scrape. Each has a 'name' and 'num_posts'.
+# target_profiles = [
+#    { name = "betches", num_posts = 5 },
+#    { name = "ladbible", num_posts = 10 }
+# ]
+
+run_name_for_url_file = "my_url_file_scrape" # Used for output folder name in URL file mode
+
 # If true, the browser will run in the background without a visible window.
 # Recommended: true for performance, false for debugging.
 headless = false
@@ -50,6 +53,9 @@ comment_scroll_steps = 3
 output_dir = "outputs"
 
 # These paths use placeholders like {target_profile} which will be automatically filled.
+# In URL file mode, {target_profile} is replaced by `run_name_for_url_file`.
+urls_filepath = "urls_to_scrape.txt"
+
 posts_path = "outputs/{target_profile}/posts_{target_profile}.txt"
 metadata_path = "outputs/{target_profile}/metadata_{target_profile}.jsonl"
 skipped_path = "outputs/{target_profile}/skipped_{target_profile}.txt"

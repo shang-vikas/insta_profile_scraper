@@ -62,10 +62,13 @@ class MainConfig(BaseSettings):
     """
     Configuration settings related to the main application logic and scraping behavior.
     """
-    target_profile: str
-    num_posts: int = Field(..., gt=0)
-    # A list of target profiles to scrape.
-    target_profiles: List[ProfileTarget]
+    # --- Scraping Mode ---
+    # To scrape profiles (can be empty if using urls_filepath)
+    target_profiles: List[ProfileTarget] = []
+    # A name for the run when scraping from a URL file.
+    run_name_for_url_file: str = "url_file_run"
+    # Internal field for the currently processed profile, not for user config.
+    target_profile: Optional[str] = None
     # If True, runs the browser in headless mode (no GUI).
     headless: bool = True
     # Minimum random delay (in seconds) between batches of requests.
@@ -100,6 +103,8 @@ class DataConfig(BaseSettings):
     """Configuration settings related to file paths and data storage."""
     # Directory where all output files will be stored.
     output_dir: str = "outputs"
+    # Optional: Path to a file containing post URLs to scrape, one per line.
+    urls_filepath: Optional[str] = None
     # Path to the file for storing collected post URLs. Supports placeholders.
     posts_path: str
     # Path to the final JSONL file for storing scraped post metadata. Supports placeholders.
@@ -140,24 +145,15 @@ def load_config(path: str) -> Config:
     """
     with open(path, "r") as f:
         data = toml.load(f)
-    # Normalize paths in config
-
-    for key, value in data["data"].items():
-        data["data"][key] = str(resolve_path(value))
 
     # Configure logging once, using logging level from TOML
     if "logging" in data and "level" in data["logging"]:
         configure_root_logger(data["logging"]["level"])
     else:
         configure_root_logger("INFO")
-
-    # Create logger for config
     logger = get_logger("config")
     logger.debug("Configuration loaded successfully")
-    config = Config(**data)
-
-    # Expand and normalize all paths in one go
-    # substitutions = {"target_profile": config.main.target_profile}
-    # expand_paths(config, substitutions)
-
-    return config
+    
+    # Return the config object without path expansion.
+    # Path expansion will be handled per-profile in the pipeline.
+    return Config(**data)

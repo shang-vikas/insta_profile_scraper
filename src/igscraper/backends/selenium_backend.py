@@ -412,8 +412,8 @@ class SeleniumBackend(Backend):
                         logger.warning(f"Failed to write tmp result for {href}: {e}")
 
                     # --- every N posts, save final and clear tmp ---
-                    if total_scraped % save_every == self.config.main.save_every:
-                        save_scrape_results(results, self.data.output_dir,self.config)
+                    if total_scraped > 0 and total_scraped % save_every == 0:
+                        save_scrape_results(results, self.config.data.output_dir, self.config)
                         clear_tmp_file(tmp_file)
                         logger.info(f"Saved results after {total_scraped} scraped posts.")
 

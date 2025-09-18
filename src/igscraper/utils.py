@@ -1323,6 +1323,8 @@ def save_intermediate(post_data, tmp_file):
         post_data: A dictionary containing the data for a single post.
         tmp_file: The path to the temporary file.
     """
+    # Ensure the parent directory exists before writing.
+    Path(tmp_file).parent.mkdir(parents=True, exist_ok=True)
     with open(tmp_file, "a", encoding="utf-8") as f:
         f.write(json.dumps(post_data, ensure_ascii=False) + "\n")
 
@@ -1564,20 +1566,21 @@ def save_scrape_results(results: dict, output_dir: str, config: dict):
         output_dir: The base directory for output files (used for mkdir).
         config: The application's configuration object, used to get file paths.
     """
-    output_path = Path(output_dir)
-    output_path.mkdir(exist_ok=True)
-
     metadata_file = config.data.metadata_path
     skipped_file = config.data.skipped_path
 
     # Save scraped posts
     if results.get("scraped_posts"):
+        # Ensure the parent directory exists before writing.
+        Path(metadata_file).parent.mkdir(parents=True, exist_ok=True)
         with open(metadata_file, "a", encoding="utf-8") as f:
             for post in results["scraped_posts"]:
                 f.write(json.dumps(post, ensure_ascii=False) + "\n")
 
     # Save skipped posts
     if results.get("skipped_posts"):
+        # Ensure the parent directory exists before writing.
+        Path(skipped_file).parent.mkdir(parents=True, exist_ok=True)
         with open(skipped_file, "a", encoding="utf-8") as f:
             for post in results["skipped_posts"]:
                 f.write(json.dumps(post, ensure_ascii=False) + "\n")
