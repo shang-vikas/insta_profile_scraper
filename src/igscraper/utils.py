@@ -82,6 +82,7 @@ def scrape_carousel_images(driver, image_gather_func, min_wait=0.5, max_wait=2.2
     Returns:
         A list of all image data dictionaries collected from the carousel.
     """
+    logger.info("Starting carousel image scrape.")
     image_data = []
     seen_srcs = set()  # track unique 'src' values
     wait = WebDriverWait(driver, 5)  # shorter timeout for Next button
@@ -89,103 +90,77 @@ def scrape_carousel_images(driver, image_gather_func, min_wait=0.5, max_wait=2.2
     steps = 0
 
     while True:
-        # Grab current visible images (filter duplicates)
+        # Grab current visible images
         new_items = image_gather_func(driver)
-        # image_data.extend(new_items)
-        # pdb.set_trace()
-        image_data.extend(new_items)
-        # for item in new_items:
-        #     src = item.get("src")
-        #     if src not in seen_srcs:
-        #         seen_srcs.add(src)
-        #         image_data.extend(item)
+        logger.debug(f"Step {steps}: image_gather_func found {len(new_items)} potential images.")
+
+        # Filter for unique images based on 'src'
+        added_count = 0
+        for item in new_items:
+            src = item.get("src")
+            if src and src not in seen_srcs:
+                seen_srcs.add(src)
+                image_data.append(item)
+                added_count += 1
+        if added_count > 0:
+            logger.debug(f"Added {added_count} new unique images. Total unique: {len(image_data)}.")
 
         try:
             # Look for Next button
             next_button = wait.until(
                 EC.presence_of_element_located((By.CSS_SELECTOR, "button[aria-label='Next']"))
             )
+            logger.debug("'Next' button found.")
         except (TimeoutException, NoSuchElementException):
-            logging.info(f"Reached end of carousel after {steps} steps.")
+            logger.info(f"Reached end of carousel after {steps} steps. No 'Next' button found.")
             break
 
         # Try to click like a human
         if not human_like_click(driver, next_button, actions):
-            logging.warning(f"Could not click Next button at step {steps}, stopping.")
+            logger.warning(f"Could not click 'Next' button at step {steps}, stopping.")
             break
 
         steps += 1
         time.sleep(random.uniform(min_wait, max_wait))
+    logger.info(f"Finished carousel scrape. Found {len(image_data)} total unique images.")
     return image_data
-
 
 
 def get_all_post_images_data(driver):
     """
-    Extracts attributes from all `<img>` tags within known carousel structures.
-
-    This function attempts to find images within a post by checking for several
-    known HTML structures used by Instagram for carousels. It is designed to be
-    a helper for `scrape_carousel_images`.
+    Extracts unique image data from Instagram posts using the fallback
+    ul._acay > li._acaz > img logic via JavaScript executed in the browser.
+    Duplicates (based on src) are removed.
 
     Args:
-        driver: The Selenium WebDriver instance.
+        driver: Selenium WebDriver instance.
 
     Returns:
-        A list of dictionaries, where each dictionary contains the attributes of an `<img>` tag.
+        List of dictionaries with unique image attributes.
     """
-    all_images = []
+    js_code = """
+    const allImages = [];
+    const seenSrc = new Set();
 
-    def extract_images_from_container(container):
-        images = []
-        try:
-            ul = container.find_element(By.CLASS_NAME, "_acay")
-            lis = ul.find_elements(By.CLASS_NAME, "_acaz")
-            for li in lis:
-                imgs = li.find_elements(By.TAG_NAME, "img")
-                for img in imgs:
-                    # collect common useful attributes
-                    img_data = {
-                        "src": img.get_attribute("src"),
-                        "alt": img.get_attribute("alt"),
-                        "title": img.get_attribute("title"),
-                        "aria_label": img.get_attribute("aria-label"),
-                        "text": img.text.strip() if img.text else None
-                    }
-                    images.append(img_data)
-        except NoSuchElementException:
-            pass
-        return images
+    document.querySelectorAll('ul._acay').forEach(ul => {
+        ul.querySelectorAll('li._acaz img').forEach(img => {
+            const src = img.getAttribute('src');
+            if (!seenSrc.has(src)) {
+                seenSrc.add(src);
+                allImages.push({
+                    src: src,
+                    alt: img.getAttribute('alt'),
+                    title: img.getAttribute('title'),
+                    aria_label: img.getAttribute('aria-label'),
+                    text: img.innerText ? img.innerText.trim() : null
+                });
+            }
+        });
+    });
 
-    # Case 1: containers with div.x1iyjqo2
-    containers = driver.find_elements(By.CLASS_NAME, "x1iyjqo2")
-    for c in containers:
-        all_images.extend(extract_images_from_container(c))
-
-    # Case 2: containers with div.x1lliihq.x1n2onr6
-    containers = driver.find_elements(By.CSS_SELECTOR, "div.x1lliihq.x1n2onr6")
-    for c in containers:
-        all_images.extend(extract_images_from_container(c))
-
-    # Case 3: fallback — any ul._acay > li._acaz > img
-    if not all_images:
-        uls = driver.find_elements(By.CLASS_NAME, "_acay")
-        for ul in uls:
-            lis = ul.find_elements(By.CLASS_NAME, "_acaz")
-            for li in lis:
-                imgs = li.find_elements(By.TAG_NAME, "img")
-                for img in imgs:
-                    img_data = {
-                        "src": img.get_attribute("src"),
-                        "alt": img.get_attribute("alt"),
-                        "title": img.get_attribute("title"),
-                        "aria_label": img.get_attribute("aria-label"),
-                        "text": img.text.strip() if img.text else None
-                    }
-                    all_images.append(img_data)
-
-    return all_images
-
+    return allImages;
+    """
+    return driver.execute_script(js_code)
 
 def images_from_post(driver):
     """
@@ -198,7 +173,7 @@ def images_from_post(driver):
         driver: The Selenium WebDriver instance.
     """
     ## try to extract multiple images if they exist
-    images = get_instagram_post_images(driver)
+    images = scrape_carousel_images(driver, get_all_post_images_data)
     if images == []:
         logging.info("Trying to extract single image.")
         # grab the single image if it exists
@@ -1323,6 +1298,8 @@ def save_intermediate(post_data, tmp_file):
         post_data: A dictionary containing the data for a single post.
         tmp_file: The path to the temporary file.
     """
+    # Ensure the parent directory exists before writing.
+    Path(tmp_file).parent.mkdir(parents=True, exist_ok=True)
     with open(tmp_file, "a", encoding="utf-8") as f:
         f.write(json.dumps(post_data, ensure_ascii=False) + "\n")
 
@@ -1564,20 +1541,21 @@ def save_scrape_results(results: dict, output_dir: str, config: dict):
         output_dir: The base directory for output files (used for mkdir).
         config: The application's configuration object, used to get file paths.
     """
-    output_path = Path(output_dir)
-    output_path.mkdir(exist_ok=True)
-
     metadata_file = config.data.metadata_path
     skipped_file = config.data.skipped_path
 
     # Save scraped posts
     if results.get("scraped_posts"):
+        # Ensure the parent directory exists before writing.
+        Path(metadata_file).parent.mkdir(parents=True, exist_ok=True)
         with open(metadata_file, "a", encoding="utf-8") as f:
             for post in results["scraped_posts"]:
                 f.write(json.dumps(post, ensure_ascii=False) + "\n")
 
     # Save skipped posts
     if results.get("skipped_posts"):
+        # Ensure the parent directory exists before writing.
+        Path(skipped_file).parent.mkdir(parents=True, exist_ok=True)
         with open(skipped_file, "a", encoding="utf-8") as f:
             for post in results["skipped_posts"]:
                 f.write(json.dumps(post, ensure_ascii=False) + "\n")
